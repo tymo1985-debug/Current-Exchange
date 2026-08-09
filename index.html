@@ -20,6 +20,7 @@
     <header class="topbar">
       <div><span class="eyebrow">GLASS CURRENCY</span><h1>Конвертер</h1></div>
       <div class="top-actions">
+        <label class="language-select" aria-label="Language"><select id="languageSelect"><option value="ru">RU</option><option value="uk">UA</option><option value="de">DE</option><option value="en">EN</option></select></label>
         <button class="icon-button" id="themeButton" aria-label="Сменить тему"><span id="themeIcon">☾</span></button>
         <button class="icon-button install-button hidden" id="installButton" aria-label="Установить приложение">↓</button>
       </div>
@@ -28,6 +29,16 @@
     <section class="status-row" aria-live="polite">
       <span class="status-pill"><i id="statusDot"></i><span id="networkStatus">Обновляем курс…</span></span>
       <span id="updatedAt">—</span>
+    </section>
+
+    <section class="market-card glass-card" id="marketCard">
+      <div class="market-head"><div><span class="eyebrow" data-i18n="cashEyebrow">НАЛИЧНЫЙ ОБМЕН</span><h2 data-i18n="cashTitle">Ориентир по стране</h2></div><select id="marketCountry" aria-label="Страна сравнения"><option value="PL">🇵🇱 Polska</option><option value="manual" data-i18n="otherCountry">🌍 Другая страна</option></select></div>
+      <div id="marketAvailable">
+        <div class="market-grid"><div><small data-i18n="onlineRate">Онлайн-курс</small><b id="onlineRateValue">—</b></div><div><small data-i18n="cashRate">Покупка / продажа</small><b id="cashRateValue">—</b></div></div>
+        <div class="difference-line"><span id="differenceText">—</span><span class="source-badge" id="marketSource">NBP · Table C</span></div>
+      </div>
+      <div class="manual-market hidden" id="manualMarket"><p data-i18n="manualHint">Введите курс, указанный в обменном пункте, чтобы увидеть разницу.</p><label><span data-i18n="officeRate">Курс обменника</span><input id="manualRate" inputmode="decimal" placeholder="0,0000"></label></div>
+      <p class="market-note" id="marketNote" data-i18n="marketNote">Это официальный ориентир покупки/продажи, а не гарантированное предложение конкретного обменника.</p>
     </section>
 
     <section class="converter glass-card" id="converterCard">
@@ -57,7 +68,7 @@
 
     <section class="travel-card glass-card">
       <div class="travel-header">
-        <div><span class="travel-icon">✈</span><div><h2>Travel Mode</h2><p>Цены без лишнего набора</p></div></div>
+        <div><span class="travel-icon">✈</span><div><h2>Travel Mode</h2><p data-i18n="travelSubtitle">Цены без лишнего набора</p></div></div>
         <label class="switch"><input type="checkbox" id="travelToggle"><span></span></label>
       </div>
       <div class="travel-content" id="travelContent" aria-hidden="true">
