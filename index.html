@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="Glass Currency — быстрый PWA-конвертер валют с Travel Mode и офлайн-режимом." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Glass Currency</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">GLASS CURRENCY</p>
+        <h1>Конвертер</h1>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="travelBtn" aria-pressed="false" title="Travel Mode">✈</button>
+        <button class="icon-btn" id="themeBtn" title="Сменить тему">◐</button>
+      </div>
+    </header>
+
+    <section class="glass-card converter" aria-label="Конвертер валют">
+      <div class="status-row">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Получаем курс…</span>
+        <span class="spacer"></span>
+        <button class="text-btn" id="refreshBtn">Обновить</button>
+      </div>
+
+      <div class="money-block">
+        <label for="fromAmount">Вы отдаёте</label>
+        <div class="money-line">
+          <input id="fromAmount" inputmode="decimal" autocomplete="off" value="100" aria-label="Исходная сумма" />
+          <button class="currency-pill" id="fromCurrencyBtn">
+            <span id="fromFlag">🇪🇺</span><strong id="fromCode">EUR</strong><span>⌄</span>
+          </button>
+        </div>
+        <div class="currency-name" id="fromName">Евро</div>
+      </div>
+
+      <div class="swap-wrap">
+        <button id="swapBtn" class="swap-btn" title="Поменять валюты местами">⇅</button>
+      </div>
+
+      <div class="money-block result-block">
+        <label for="toAmount">Вы получаете</label>
+        <div class="money-line">
+          <input id="toAmount" inputmode="decimal" autocomplete="off" aria-label="Результирующая сумма" />
+          <button class="currency-pill" id="toCurrencyBtn">
+            <span id="toFlag">🇨🇿</span><strong id="toCode">CZK</strong><span>⌄</span>
+          </button>
+        </div>
+        <div class="currency-name" id="toName">Чешская крона</div>
+      </div>
+
+      <div class="rate-panel">
+        <div>
+          <span class="muted">Курс</span>
+          <strong id="rateText">—</strong>
+        </div>
+        <div class="rate-meta" id="rateMeta">—</div>
+      </div>
+    </section>
+
+    <section class="travel-panel glass-card hidden" id="travelPanel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">TRAVEL MODE</p>
+          <h2>Быстрые суммы</h2>
+        </div>
+        <span class="offline-badge" id="offlineBadge">Готов к офлайну</span>
+      </div>
+      <div class="quick-grid" id="quickGrid"></div>
+      <div class="travel-table" id="travelTable"></div>
+    </section>
+
+    <section class="glass-card favorites">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">ИЗБРАННОЕ</p>
+          <h2>Быстрый выбор</h2>
+        </div>
+        <button class="text-btn" id="addFavoriteBtn">+ Текущая пара</button>
+      </div>
+      <div class="favorite-list" id="favoriteList"></div>
+    </section>
+
+    <p class="footnote">Справочный курс. Финальный курс банка, карты или обменника может отличаться.</p>
+  </main>
+
+  <dialog id="currencyDialog">
+    <div class="dialog-card">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">ВАЛЮТА</p>
+          <h2>Выберите валюту</h2>
+        </div>
+        <button class="icon-btn" id="closeDialog">×</button>
+      </div>
+      <input id="currencySearch" class="search" placeholder="Поиск: EUR, евро, Польша…" />
+      <div class="currency-list" id="currencyList"></div>
+    </div>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
