@@ -46,7 +46,7 @@
         <button class="currency-button" data-side="from" aria-label="Выбрать исходную валюту">
           <span class="flag" id="fromFlag">🇪🇺</span><span><b id="fromCode">EUR</b><small id="fromName">Евро</small></span><span class="chevron">⌄</span>
         </button>
-        <label class="amount-wrap"><span class="currency-symbol" id="fromSymbol">€</span><input id="fromAmount" inputmode="decimal" autocomplete="off" value="100" aria-label="Сумма в исходной валюте"></label>
+        <div class="amount-wrap"><button class="calc-trigger" data-side="from" aria-label="Открыть калькулятор">⌗</button><span class="currency-symbol" id="fromSymbol">€</span><input id="fromAmount" inputmode="decimal" autocomplete="off" value="100" aria-label="Сумма в исходной валюте"></div>
       </div>
 
       <div class="divider"><button class="swap-button" id="swapButton" aria-label="Поменять валюты местами">⇅</button></div>
@@ -55,7 +55,7 @@
         <button class="currency-button" data-side="to" aria-label="Выбрать целевую валюту">
           <span class="flag" id="toFlag">🇵🇱</span><span><b id="toCode">PLN</b><small id="toName">Польский злотый</small></span><span class="chevron">⌄</span>
         </button>
-        <label class="amount-wrap"><span class="currency-symbol" id="toSymbol">zł</span><input id="toAmount" inputmode="decimal" autocomplete="off" aria-label="Сумма в целевой валюте"></label>
+        <div class="amount-wrap"><button class="calc-trigger" data-side="to" aria-label="Открыть калькулятор">⌗</button><span class="currency-symbol" id="toSymbol">zł</span><input id="toAmount" inputmode="decimal" autocomplete="off" aria-label="Сумма в целевой валюте"></div>
       </div>
 
       <div class="rate-line"><span id="rateText">1 EUR = — PLN</span><button id="refreshButton" aria-label="Обновить курс">↻</button></div>
@@ -88,6 +88,21 @@
     <label class="search-box"><span>⌕</span><input id="currencySearch" type="search" placeholder="Название или код" autocomplete="off"></label>
     <div class="recent-label">ПОПУЛЯРНЫЕ И ДОСТУПНЫЕ</div>
     <div class="currency-list" id="currencyList"></div>
+  </section>
+  <div class="calc-backdrop" id="calcBackdrop"></div>
+  <section class="calculator-sheet" id="calculatorSheet" role="dialog" aria-modal="true" aria-labelledby="calculatorTitle">
+    <div class="grabber"></div>
+    <div class="calc-header"><div><span class="eyebrow" data-i18n="calculatorEyebrow">БЫСТРЫЙ РАСЧЁТ</span><h2 id="calculatorTitle" data-i18n="calculator">Калькулятор</h2></div><button class="icon-button" id="closeCalculator" aria-label="Закрыть">×</button></div>
+    <div class="calc-display"><div class="calc-expression" id="calcExpression">0</div><div class="calc-result"><span>=</span><b id="calcResult">0</b><small id="calcCurrency">EUR</small></div></div>
+    <div class="calc-history-wrap"><div class="calc-history-head"><span data-i18n="history">История</span><button id="clearHistory" data-i18n="clear">Очистить</button></div><div class="calc-history" id="calcHistory"></div></div>
+    <div class="calc-keypad" id="calcKeypad">
+      <button data-key="clear" class="calc-function">C</button><button data-key="(" class="calc-function">(</button><button data-key=")" class="calc-function">)</button><button data-key="backspace" class="calc-function">⌫</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button data-key="/" class="calc-operator">÷</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button data-key="*" class="calc-operator">×</button>
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button data-key="-" class="calc-operator">−</button>
+      <button data-key="0">0</button><button data-key=".">,</button><button data-key="%">%</button><button data-key="+" class="calc-operator">+</button>
+      <button data-key="apply" class="calc-apply" data-i18n="applyResult">Использовать результат</button>
+    </div>
   </section>
   <div class="toast" id="toast" role="status"></div>
   <script src="app.js"></script>
