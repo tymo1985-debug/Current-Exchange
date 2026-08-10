@@ -31,16 +31,6 @@
       <span id="updatedAt">—</span>
     </section>
 
-    <section class="market-card glass-card" id="marketCard">
-      <div class="market-head"><div><span class="eyebrow" data-i18n="cashEyebrow">НАЛИЧНЫЙ ОБМЕН</span><h2 data-i18n="cashTitle">Ориентир по стране</h2></div><select id="marketCountry" aria-label="Страна сравнения"><option value="PL">🇵🇱 Polska</option><option value="manual" data-i18n="otherCountry">🌍 Другая страна</option></select></div>
-      <div id="marketAvailable">
-        <div class="market-grid"><div><small data-i18n="onlineRate">Онлайн-курс</small><b id="onlineRateValue">—</b></div><div><small data-i18n="cashRate">Покупка / продажа</small><b id="cashRateValue">—</b></div></div>
-        <div class="difference-line"><span id="differenceText">—</span><span class="source-badge" id="marketSource">NBP · Table C</span></div>
-      </div>
-      <div class="manual-market hidden" id="manualMarket"><p data-i18n="manualHint">Введите курс, указанный в обменном пункте, чтобы увидеть разницу.</p><label><span data-i18n="officeRate">Курс обменника</span><input id="manualRate" inputmode="decimal" placeholder="0,0000"></label></div>
-      <p class="market-note" id="marketNote" data-i18n="marketNote">Это официальный ориентир покупки/продажи, а не гарантированное предложение конкретного обменника.</p>
-    </section>
-
     <section class="converter glass-card" id="converterCard">
       <div class="currency-block" id="fromBlock">
         <button class="currency-button" data-side="from" aria-label="Выбрать исходную валюту">
@@ -61,6 +51,8 @@
       <div class="rate-line"><span id="rateText">1 EUR = — PLN</span><button id="refreshButton" aria-label="Обновить курс">↻</button></div>
     </section>
 
+    <button class="compare-trigger" id="compareTrigger"><span><i>↗</i><span><b data-i18n="rateComparison">Сравнение курса</b><small data-i18n="compareSubtitle">Онлайн и обменный пункт</small></span></span><span class="chevron">›</span></button>
+
     <section class="favorites-section">
       <div class="section-heading"><h2>Быстрые пары</h2><span>нажмите для выбора</span></div>
       <div class="favorite-chips" id="favorites"></div>
@@ -78,7 +70,7 @@
       </div>
     </section>
 
-    <footer><span>Курсы от Frankfurter · данные центробанков</span><span>v2.0</span></footer>
+    <footer><span>Курсы от Frankfurter · данные центробанков</span><span>v2.3</span></footer>
   </main>
 
   <div class="sheet-backdrop" id="sheetBackdrop"></div>
@@ -103,6 +95,18 @@
       <button data-key="0">0</button><button data-key=".">,</button><button data-key="%">%</button><button data-key="+" class="calc-operator">+</button>
       <button data-key="apply" class="calc-apply" data-i18n="applyResult">Использовать результат</button>
     </div>
+  </section>
+  <div class="market-backdrop" id="marketBackdrop"></div>
+  <section class="market-sheet" id="marketSheet" role="dialog" aria-modal="true" aria-labelledby="marketTitle">
+    <div class="grabber"></div>
+    <div class="market-head"><div><span class="eyebrow" data-i18n="cashEyebrow">СРАВНЕНИЕ КУРСА</span><h2 id="marketTitle" data-i18n="cashTitle">Онлайн и обменный пункт</h2></div><button class="icon-button" id="closeMarket" aria-label="Закрыть">×</button></div>
+    <label class="market-country-label"><span data-i18n="comparisonCountry">Источник сравнения</span><select id="marketCountry" aria-label="Страна сравнения"><option value="PL">🇵🇱 Polska · NBP</option><option value="manual" data-i18n="otherCountry">🌍 Другая страна</option></select></label>
+    <div id="marketAvailable">
+      <div class="market-grid"><div><small data-i18n="onlineRate">Онлайн-курс</small><b id="onlineRateValue">—</b></div><div><small data-i18n="cashRate">Покупка / продажа</small><b id="cashRateValue">—</b></div></div>
+      <div class="difference-line"><span id="differenceText">—</span><span class="source-badge" id="marketSource">NBP · Table C</span></div>
+    </div>
+    <div class="manual-market hidden" id="manualMarket"><p data-i18n="manualHint">Введите курс, указанный в обменном пункте, чтобы увидеть разницу.</p><label><span data-i18n="officeRate">Курс обменника</span><input id="manualRate" inputmode="decimal" placeholder="0,0000"></label></div>
+    <p class="market-note" id="marketNote" data-i18n="marketNote">Это официальный ориентир покупки/продажи, а не гарантированное предложение конкретного обменника.</p>
   </section>
   <div class="toast" id="toast" role="status"></div>
   <script src="app.js"></script>

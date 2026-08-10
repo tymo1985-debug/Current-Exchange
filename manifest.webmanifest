@@ -19,6 +19,8 @@
   ],
   "shortcuts": [
     {"name":"EUR → PLN","short_name":"EUR/PLN","url":"./?from=EUR&to=PLN","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]},
-    {"name":"Travel Mode","short_name":"Travel","url":"./?travel=1","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]}
+    {"name":"Travel Mode","short_name":"Travel","url":"./?travel=1","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]},
+    {"name":"Калькулятор","short_name":"Calc","url":"./?calculator=1","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]},
+    {"name":"Сравнение курса","short_name":"Compare","url":"./?compare=1","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]}
   ]
 }
