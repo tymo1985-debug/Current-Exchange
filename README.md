@@ -1,44 +1,50 @@
-# Current-Exchange — Currency Picker UX patch
+# Current-Exchange — P0 Rate Safety
 
-Target baseline: `c58d6c2450508998c329d91b19a03ff981c04b86`
+Prepared against the current repository state whose latest commit was
+`f2004c4814df91a1194d6253b590e2be15f1c810`.
 
-Implements:
-- no automatic keyboard when the currency selector opens;
-- Favorites, Recent, and All currencies sections;
-- star/unstar any currency;
-- persistence of favorites and recent currencies in `glassCurrencyState`;
-- RU / UA / DE / EN labels for the new selector UI;
-- focus return after closing the bottom sheet;
-- browser zoom restored by removing `user-scalable=no`;
-- PWA cache/version bumped to 2.4.
+Production files changed by the patch: `app.js`, `sw.js`.
 
-Existing conversion logic and static Quick Pairs are intentionally preserved.
+## Fixes
+
+- removes hard-coded fallback exchange rates;
+- never substitutes `1` for an unavailable market rate;
+- explicit live / saved / unavailable / same-currency states;
+- validates cached rates and stores market-data date + local fetch timestamp;
+- remains compatible with legacy `{rate, updated}` cache entries without claiming an invented save time;
+- `AbortController` + request-id + captured-pair checks for Frankfurter;
+- the same race protection for NBP;
+- avoids mixing a live NBP benchmark with a saved Frankfurter rate;
+- service worker makes Frankfurter and NBP network-only;
+- removes the obsolete `api.frankfurter.app` rule;
+- bumps service-worker cache to `glass-currency-v2.5.0`.
 
 ## Apply
 
-```bash
-python3 apply_currency_picker.py /path/to/Current-Exchange
-```
-
-Or place the script in the repository root and run:
+From the repository root:
 
 ```bash
-python3 apply_currency_picker.py
+python3 apply_p0_rate_safety.py
+python3 verify_p0_rate_safety.py
 ```
 
-The script validates every expected source anchor before writing any file. If the repository has diverged from the target baseline, it stops instead of partially applying the patch.
-
-After applying:
+Or pass the repository path explicitly:
 
 ```bash
-git diff -- app.js index.html styles.css sw.js
+python3 apply_p0_rate_safety.py /path/to/Current-Exchange
+python3 verify_p0_rate_safety.py /path/to/Current-Exchange
 ```
 
-Recommended manual checks:
-1. Open either currency selector: the keyboard must stay closed.
-2. Tap the search field: keyboard opens and filtering works.
-3. Star/unstar currencies and reload: choices persist.
-4. Select currencies and reopen: Recent is updated.
-5. Switch RU / UA / DE / EN while the picker is open.
-6. Verify Quick Pairs, swap, calculator, Travel Mode, and refresh still work.
-7. Reload the installed PWA once so the new `glass-currency-v2.4.0` cache activates.
+The patch validates every expected source anchor before writing either production file.
+If Node.js is installed, it also runs `node --check` before writing.
+
+## Browser checks
+
+1. Online pair: live rate + market data date.
+2. Offline with cache: saved-rate status; no pretending it is live.
+3. Offline without cache: target amount blank, rate line shows `—`, status says unavailable.
+4. Rapid pair switching: late response from an older pair must never overwrite the newest pair.
+5. Restore network and refresh: live rate replaces saved/unavailable state.
+6. Same currency: exactly 1:1 without a market request.
+7. Reload installed PWA: API responses must not come from Cache Storage.
+8. PLN comparison: automatic NBP comparison runs only with a live Frankfurter rate.
