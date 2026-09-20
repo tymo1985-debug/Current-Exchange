@@ -10,7 +10,6 @@ const CURRENCIES = {
   AUD:{name:'Австралийский доллар',flag:'🇦🇺',symbol:'A$'}, CNY:{name:'Китайский юань',flag:'🇨🇳',symbol:'¥'},
   ISK:{name:'Исландская крона',flag:'🇮🇸',symbol:'kr'}, BRL:{name:'Бразильский реал',flag:'🇧🇷',symbol:'R$'}
 };
-const FALLBACK = {EUR_PLN:4.28,EUR_CZK:24.5,EUR_USD:1.08,EUR_GBP:.84,PLN_CZK:5.72,USD_PLN:3.96};
 const FAVORITES = [['EUR','PLN'],['EUR','CZK'],['PLN','CZK'],['EUR','USD'],['USD','PLN']];
 const I18N={
  ru:{title:'Конвертер',updating:'Обновляем курс…',fresh:'Курс актуален',offline:'Офлайн · сохранённый курс',updated:'обновлено',cashEyebrow:'НАЛИЧНЫЙ ОБМЕН',cashTitle:'Ориентир по стране',otherCountry:'🌍 Другая страна',onlineRate:'Онлайн-курс',cashRate:'Покупка / продажа',manualHint:'Введите курс, указанный в обменном пункте, чтобы увидеть разницу.',officeRate:'Курс обменника',marketNote:'Это официальный ориентир покупки/продажи, а не гарантированное предложение конкретного обменника.',travelSubtitle:'Цены без лишнего набора',difference:'Разница',unavailable:'Для этой пары нет официального наличного ориентира',buy:'покупка',sell:'продажа',calculatorEyebrow:'БЫСТРЫЙ РАСЧЁТ',calculator:'Калькулятор',history:'История',clear:'Очистить',applyResult:'Использовать результат',emptyHistory:'Пока пусто'},
@@ -22,11 +21,15 @@ Object.assign(I18N.ru,{rateComparison:'Сравнение курса',compareSub
 Object.assign(I18N.uk,{rateComparison:'Порівняння курсу',compareSubtitle:'Онлайн та обмінний пункт',comparisonCountry:'Джерело порівняння',cashEyebrow:'ПОРІВНЯННЯ КУРСУ',cashTitle:'Онлайн та обмінний пункт'});
 Object.assign(I18N.de,{rateComparison:'Kursvergleich',compareSubtitle:'Online und Wechselstube',comparisonCountry:'Vergleichsquelle',cashEyebrow:'KURSVERGLEICH',cashTitle:'Online und Wechselstube'});
 Object.assign(I18N.en,{rateComparison:'Rate comparison',compareSubtitle:'Online and exchange office',comparisonCountry:'Comparison source',cashEyebrow:'RATE COMPARISON',cashTitle:'Online and exchange office'});
+Object.assign(I18N.ru,{savedRate:'Сохранённый курс',rateUnavailable:'Курс недоступен',dataDate:'данные за',received:'получен',noRate:'Нет сохранённого курса'});
+Object.assign(I18N.uk,{savedRate:'Збережений курс',rateUnavailable:'Курс недоступний',dataDate:'дані за',received:'отримано',noRate:'Немає збереженого курсу'});
+Object.assign(I18N.de,{savedRate:'Gespeicherter Kurs',rateUnavailable:'Kurs nicht verfügbar',dataDate:'Daten vom',received:'abgerufen',noRate:'Kein gespeicherter Kurs'});
+Object.assign(I18N.en,{savedRate:'Saved rate',rateUnavailable:'Rate unavailable',dataDate:'data for',received:'received',noRate:'No saved rate'});
 const $ = id => document.getElementById(id);
 const saved = JSON.parse(localStorage.getItem('glassCurrencyState') || '{}');
 const params = new URLSearchParams(location.search);
-const state = {from:params.get('from') || saved.from || 'EUR',to:params.get('to') || saved.to || 'PLN',rate:1,cashRate:null,cashKind:null,activeInput:'from',updated:null,pickerSide:'from',lang:saved.lang||((navigator.language||'ru').slice(0,2))};
-let installPrompt, inputTimer;
+const state = {from:params.get('from') || saved.from || 'EUR',to:params.get('to') || saved.to || 'PLN',rate:null,rateSource:'unavailable',rateDate:null,receivedAt:null,cashRate:null,cashKind:null,activeInput:'from',pickerSide:'from',lang:saved.lang||((navigator.language||'ru').slice(0,2))};
+let installPrompt, inputTimer, rateRequestId=0, rateController=null, cashRequestId=0, cashController=null;
 let calcSide='from',calcExpression='0',calcHistory=JSON.parse(localStorage.getItem('glassCurrencyCalcHistory')||'[]');
 
 function save(){localStorage.setItem('glassCurrencyState',JSON.stringify({from:state.from,to:state.to,travel:$('travelToggle').checked,theme:document.body.classList.contains('light')?'light':'dark',lang:state.lang}))}
@@ -44,15 +47,17 @@ function evaluateExpression(expression){
 function amountValue(value){const evaluated=evaluateExpression(value);return evaluated===null?parseValue(value):evaluated}
 function format(value,code,compact=false){return new Intl.NumberFormat('ru-RU',{minimumFractionDigits:compact?0:2,maximumFractionDigits:compact?2:2}).format(Number.isFinite(value)?value:0)}
 function formatInput(value){return format(value,'',false)}
-function ageLabel(date){if(!date)return 'нет сохранённых данных';const mins=Math.max(0,Math.round((Date.now()-date.getTime())/60000));if(mins<1)return 'только что';if(mins<60)return `${mins} мин назад`;const hours=Math.round(mins/60);return `${hours} ч назад`}
+function ageLabel(date){if(!date)return '—';const mins=Math.max(0,Math.floor((Date.now()-date.getTime())/60000));if(mins<1)return {ru:'только что',uk:'щойно',de:'gerade eben',en:'just now'}[state.lang]||'just now';if(mins<60)return `${mins} min`;if(mins<1440)return `${Math.floor(mins/60)} h`;return `${Math.floor(mins/1440)} d`}
 function cacheKey(){return `rate_${state.from}_${state.to}`}
-function getCached(){try{return JSON.parse(localStorage.getItem(cacheKey()))}catch{return null}}
+function getCached(){try{const value=JSON.parse(localStorage.getItem(cacheKey()));if(!value||!Number.isFinite(value.rate)||value.rate<=0)return null;const receivedAt=value.receivedAt?new Date(value.receivedAt):null;if(receivedAt&&!Number.isFinite(receivedAt.getTime()))return null;const legacyDate=value.updated?new Date(value.updated):null;const rateDate=value.rateDate||(!receivedAt&&legacyDate&&Number.isFinite(legacyDate.getTime())?legacyDate.toISOString().slice(0,10):null);return {rate:value.rate,rateDate,receivedAt}}catch{return null}}
+function rateDateLabel(value){return value?`${t('dataDate')} ${value}`:''}
 
 function renderCurrencies(){
   ['from','to'].forEach(side=>{const code=state[side],item=CURRENCIES[code];$(`${side}Code`).textContent=code;$(`${side}Name`).textContent=item.name;$(`${side}Flag`).textContent=item.flag;$(`${side}Symbol`).textContent=item.symbol});
   document.querySelectorAll('.pair-chip').forEach(b=>b.classList.toggle('active',b.dataset.pair===`${state.from}_${state.to}`));
 }
 function calculate(source=state.activeInput,animate=true){
+  if(state.rate===null){$(source==='from'?'toAmount':'fromAmount').value='—';$('rateText').textContent='—';renderTravel();renderMarket();return}
   if(source==='from'){$('toAmount').value=formatInput(amountValue($('fromAmount').value)*state.rate)}
   else {$('fromAmount').value=formatInput(amountValue($('toAmount').value)/state.rate)}
   $('rateText').textContent=`1 ${state.from} = ${format(state.rate,'',false)} ${state.to}`;
@@ -61,23 +66,29 @@ function calculate(source=state.activeInput,animate=true){
   renderMarket();
 }
 async function loadRate(showToast=false){
+  const requestId=++rateRequestId;rateController?.abort();rateController=new AbortController();
+  const {from,to}=state;const current=()=>requestId===rateRequestId&&state.from===from&&state.to===to;
+  cashController?.abort();++cashRequestId;state.cashRate=null;state.cashKind=null;
+  state.rate=null;state.rateSource='unavailable';state.rateDate=null;state.receivedAt=null;calculate(state.activeInput,false);
   $('refreshButton').classList.add('loading');$('networkStatus').textContent=t('updating');$('statusDot').className='';
-  if(state.from===state.to){state.rate=1;state.updated=new Date();finishRate(true);return}
+  if(from===to){state.rate=1;state.rateSource='same';finishRate();return}
   try{
-    const response=await fetch(`https://api.frankfurter.dev/v2/rate/${state.from}/${state.to}`,{cache:'no-store'});
-    if(!response.ok)throw new Error('Rate unavailable'); const data=await response.json(); state.rate=data.rate;state.updated=new Date(data.date||Date.now());
-    localStorage.setItem(cacheKey(),JSON.stringify({rate:state.rate,updated:state.updated.toISOString()}));finishRate(true);if(showToast)toast('Курс обновлён');
+    const response=await fetch(`https://api.frankfurter.dev/v2/rate/${from}/${to}`,{cache:'no-store',signal:rateController.signal});
+    if(!response.ok)throw new Error('Rate unavailable');const data=await response.json();if(!current())return;
+    if(!Number.isFinite(data.rate)||data.rate<=0)throw new Error('Invalid rate');
+    state.rate=data.rate;state.rateDate=/^\d{4}-\d{2}-\d{2}$/.test(data.date)?data.date:null;state.receivedAt=new Date();state.rateSource='live';
+    localStorage.setItem(cacheKey(),JSON.stringify({rate:state.rate,rateDate:state.rateDate,receivedAt:state.receivedAt.toISOString()}));finishRate();if(showToast)toast(t('fresh'));
   }catch(error){
-    const cached=getCached(); const fallback=FALLBACK[`${state.from}_${state.to}`] || (FALLBACK[`${state.to}_${state.from}`]?1/FALLBACK[`${state.to}_${state.from}`]:null);
-    if(cached){state.rate=cached.rate;state.updated=new Date(cached.updated)}else if(fallback){state.rate=fallback;state.updated=null}else{state.rate=1;state.updated=null}
-    finishRate(false);if(showToast)toast(cached?'Используется сохранённый курс':'Сеть недоступна');
+    if(!current())return;const cached=getCached();
+    if(cached){state.rate=cached.rate;state.rateDate=cached.rateDate;state.receivedAt=cached.receivedAt;state.rateSource='saved'}
+    finishRate();if(showToast)toast(cached?t('savedRate'):t('rateUnavailable'));
   }
 }
-function finishRate(online){$('refreshButton').classList.remove('loading');$('statusDot').className=online?'online':'offline';$('networkStatus').textContent=online?t('fresh'):t('offline');$('updatedAt').textContent=state.updated?`${t('updated')} ${ageLabel(state.updated)}`:'—';calculate(state.activeInput,false);loadCashBenchmark()}
+function finishRate(){const source=state.rateSource;$('refreshButton').classList.remove('loading');$('statusDot').className=source==='live'||source==='same'?'online':'offline';$('networkStatus').textContent=source==='live'?t('fresh'):source==='saved'?t('savedRate'):source==='same'?t('fresh'):t('rateUnavailable');$('updatedAt').textContent=source==='unavailable'?t('noRate'):[rateDateLabel(state.rateDate),state.receivedAt?`${t('received')} ${ageLabel(state.receivedAt)}`:''].filter(Boolean).join(' · ');calculate(state.activeInput,false);loadCashBenchmark()}
 
-async function loadCashBenchmark(){state.cashRate=null;state.cashKind=null;if($('marketCountry').value!=='PL'||(state.from!=='PLN'&&state.to!=='PLN')){renderMarket();return}const foreign=state.from==='PLN'?state.to:state.from;if(foreign==='PLN'){renderMarket();return}try{const response=await fetch(`https://api.nbp.pl/api/exchangerates/rates/c/${foreign}/?format=json`,{cache:'no-store'});if(!response.ok)throw new Error();const item=(await response.json()).rates[0];if(state.to==='PLN'){state.cashRate=item.bid;state.cashKind='buy'}else{state.cashRate=1/item.ask;state.cashKind='sell'}renderMarket()}catch{renderMarket()}}
-function renderMarket(){if(!$('marketCountry'))return;const manual=$('marketCountry').value==='manual';$('manualMarket').classList.toggle('hidden',!manual);$('marketAvailable').classList.toggle('hidden',manual);if(manual){const rate=parseValue($('manualRate').value);state.cashRate=rate||null;renderDifference();return}$('onlineRateValue').textContent=`${format(state.rate)} ${state.to}`;if(!state.cashRate){$('cashRateValue').textContent='—';$('differenceText').textContent=t('unavailable');$('differenceText').className='';return}$('cashRateValue').textContent=`${format(state.cashRate)} ${state.to} · ${t(state.cashKind)}`;renderDifference()}
-function renderDifference(){if(!state.cashRate){if($('marketCountry').value==='manual')$('differenceText').textContent='—';return}const amount=amountValue($('fromAmount').value);const cash=amount*state.cashRate,online=amount*state.rate,diff=cash-online,pct=online?diff/online*100:0;$('differenceText').textContent=`${t('difference')}: ${diff>=0?'+':''}${format(diff)} ${state.to} (${pct>=0?'+':''}${pct.toFixed(2)}%)`;$('differenceText').className=diff>=0?'positive':'negative'}
+async function loadCashBenchmark(){const requestId=++cashRequestId;cashController?.abort();cashController=new AbortController();const {from,to}=state;const current=()=>requestId===cashRequestId&&state.from===from&&state.to===to&&$('marketCountry').value==='PL';state.cashRate=null;state.cashKind=null;if($('marketCountry').value!=='PL'||(from!=='PLN'&&to!=='PLN')){renderMarket();return}const foreign=from==='PLN'?to:from;if(foreign==='PLN'){renderMarket();return}try{const response=await fetch(`https://api.nbp.pl/api/exchangerates/rates/c/${foreign}/?format=json`,{cache:'no-store',signal:cashController.signal});if(!response.ok)throw new Error();const item=(await response.json()).rates[0];if(!current())return;const rate=to==='PLN'?item.bid:1/item.ask;if(!Number.isFinite(rate)||rate<=0)throw new Error('Invalid cash rate');state.cashRate=rate;state.cashKind=to==='PLN'?'buy':'sell';renderMarket()}catch{if(current())renderMarket()}}
+function renderMarket(){if(!$('marketCountry'))return;const manual=$('marketCountry').value==='manual';$('manualMarket').classList.toggle('hidden',!manual);$('marketAvailable').classList.toggle('hidden',manual);if(manual){const rate=parseValue($('manualRate').value);state.cashRate=rate||null;renderDifference();return}$('onlineRateValue').textContent=state.rate===null?'—':`${format(state.rate)} ${state.to}`;if(!state.cashRate){$('cashRateValue').textContent='—';$('differenceText').textContent=t('unavailable');$('differenceText').className='';return}$('cashRateValue').textContent=`${format(state.cashRate)} ${state.to} · ${t(state.cashKind)}`;renderDifference()}
+function renderDifference(){if(!state.cashRate||state.rate===null||state.rateSource==='saved'&&$('marketCountry').value!=='manual'){$('differenceText').textContent='—';$('differenceText').className='';return}const amount=amountValue($('fromAmount').value);const cash=amount*state.cashRate,online=amount*state.rate,diff=cash-online,pct=online?diff/online*100:0;$('differenceText').textContent=`${t('difference')}: ${diff>=0?'+':''}${format(diff)} ${state.to} (${pct>=0?'+':''}${pct.toFixed(2)}%)`;$('differenceText').className=diff>=0?'positive':'negative'}
 
 function createFavorites(){
   $('favorites').innerHTML=FAVORITES.map(([a,b])=>`<button class="pair-chip" data-pair="${a}_${b}">${CURRENCIES[a].flag} ${a} <span>→</span> ${b}</button>`).join('');
@@ -85,7 +96,7 @@ function createFavorites(){
 }
 function renderTravel(){
   const values=[1,5,10,20,50,100];$('quickValues').innerHTML=values.map(v=>`<button class="quick-button" data-value="${v}">${CURRENCIES[state.from].symbol}${v}</button>`).join('');
-  $('travelList').innerHTML=values.slice(1).map(v=>`<div class="travel-row"><span>${format(v,'',true)} ${state.from}</span><b>${format(v*state.rate,'',false)} ${state.to}</b></div>`).join('');
+  $('travelList').innerHTML=values.slice(1).map(v=>`<div class="travel-row"><span>${format(v,'',true)} ${state.from}</span><b>${state.rate===null?'—':format(v*state.rate,'',false)} ${state.to}</b></div>`).join('');
 }
 function openSheet(side){state.pickerSide=side;$('currencySearch').value='';renderCurrencyList();$('currencySheet').classList.add('open');$('sheetBackdrop').classList.add('open');document.body.style.overflow='hidden';setTimeout(()=>$('currencySearch').focus(),350)}
 function closeSheet(){$('currencySheet').classList.remove('open');$('sheetBackdrop').classList.remove('open');document.body.style.overflow=''}
@@ -95,7 +106,7 @@ function renderCurrencyList(query=''){
 }
 function selectCurrency(code){const other=state.pickerSide==='from'?'to':'from';if(state[other]===code)state[other]=state[state.pickerSide];state[state.pickerSide]=code;state.activeInput='from';renderCurrencies();save();closeSheet();animateSwap();loadRate()}
 function animateSwap(){[$('fromBlock'),$('toBlock')].forEach(el=>{el.classList.remove('block-swap');void el.offsetWidth;el.classList.add('block-swap')})}
-function swap(){const oldFrom=amountValue($('fromAmount').value);[state.from,state.to]=[state.to,state.from];state.rate=1/state.rate;state.activeInput='from';$('fromAmount').value=formatInput(amountValue($('toAmount').value));$('toAmount').value=formatInput(oldFrom);$('swapButton').classList.toggle('spinning');animateSwap();renderCurrencies();calculate('from');save();loadRate()}
+function swap(){const oldFrom=amountValue($('fromAmount').value);[state.from,state.to]=[state.to,state.from];state.activeInput='from';$('fromAmount').value=state.rate===null?formatInput(oldFrom):formatInput(amountValue($('toAmount').value));$('swapButton').classList.toggle('spinning');animateSwap();renderCurrencies();save();loadRate()}
 function openCalculator(side){calcSide=side;const raw=$(`${side}Amount`).value.replace(/[\s\u00a0]/g,'').replace(',','.');calcExpression=evaluateExpression(raw)===null?'0':raw;$('calcCurrency').textContent=state[side];renderCalculator();$('calculatorSheet').classList.add('open');$('calcBackdrop').classList.add('open');document.body.style.overflow='hidden'}
 function closeCalculator(){$('calculatorSheet').classList.remove('open');$('calcBackdrop').classList.remove('open');if(!$('currencySheet').classList.contains('open'))document.body.style.overflow=''}
 function openMarket(){$('marketSheet').classList.add('open');$('marketBackdrop').classList.add('open');document.body.style.overflow='hidden';loadCashBenchmark()}
