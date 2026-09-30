@@ -59,21 +59,21 @@ Object.assign(I18N.en,{sameCurrency:'Same currency',comparisonNeedsFresh:'Refres
 const $ = id => document.getElementById(id);
 const saved = JSON.parse(localStorage.getItem('glassCurrencyState') || '{}');
 const params = new URLSearchParams(location.search);
-const state = {from:params.get('from') || saved.from || 'EUR',to:params.get('to') || saved.to || 'PLN',rate:null,rateSource:'unavailable',rateDate:null,receivedAt:null,cashRate:null,cashKind:null,activeInput:'from',pickerSide:'from',lang:saved.lang||((navigator.language||'ru').slice(0,2))};
+const state = {from:params.get('from') || saved.from || 'EUR',to:params.get('to') || saved.to || 'PLN',rate:null,rateSource:'unavailable',rateDate:null,receivedAt:null,activeInput:'from',pickerSide:'from',lang:saved.lang||((navigator.language||'ru').slice(0,2))};
 function normalizeCurrencyCodes(list){return [...new Set((Array.isArray(list)?list:[]).filter(isCode))]}
 let activeCurrencies=Array.isArray(saved.activeCurrencies)?normalizeCurrencyCodes(saved.activeCurrencies):[...DEFAULT_ACTIVE_CURRENCIES];
 if(activeCurrencies.length<MIN_ACTIVE_CURRENCIES)activeCurrencies=[...DEFAULT_ACTIVE_CURRENCIES];
 let pickerMode='select',pickerEdit=false;
 let favoriteCurrencies=Array.isArray(saved.favoriteCurrencies)?normalizeCurrencyCodes(saved.favoriteCurrencies):[...DEFAULT_FAVORITE_CURRENCIES];
 let recentCurrencies=normalizeCurrencyCodes(saved.recentCurrencies).slice(0,MAX_RECENT_CURRENCIES);
-let currencySheetReturnFocus=null, calculatorReturnFocus=null, marketReturnFocus=null;
-let installPrompt, inputTimer, rateRequestId=0, rateController=null, cashRequestId=0, cashController=null;
+let currencySheetReturnFocus=null, calculatorReturnFocus=null;
+let installPrompt, inputTimer, rateRequestId=0, rateController=null;
 let calcSide='from',calcExpression='0',calcHistory=JSON.parse(localStorage.getItem('glassCurrencyCalcHistory')||'[]');
 
 function save(){localStorage.setItem('glassCurrencyState',JSON.stringify({from:state.from,to:state.to,travel:$('travelToggle').checked,theme:document.body.classList.contains('light')?'light':'dark',lang:state.lang,favoriteCurrencies,recentCurrencies,activeCurrencies}))}
 function t(key){return (I18N[state.lang]||I18N.ru)[key]||I18N.ru[key]||key}
 function currencyName(code){try{return new Intl.DisplayNames([state.lang],{type:'currency'}).of(code)||meta(code).name}catch{return meta(code).name}}
-function applyLanguage(){updateResetButton?.();if(!I18N[state.lang])state.lang='en';document.documentElement.lang=state.lang;$('languageSelect').value=state.lang;document.querySelector('.topbar h1').textContent=t('title');document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));const pickerEyebrow=document.querySelector('#currencySheet .eyebrow');if(pickerEyebrow)pickerEyebrow.textContent=t('currencies');$('sheetTitle').textContent=t('chooseCurrency');$('currencySearch').placeholder=t('currencySearch');renderCurrencies();if($('currencySheet').classList.contains('open'))renderCurrencyList($('currencySearch').value);renderMarket()}
+function applyLanguage(){updateResetButton?.();if(!I18N[state.lang])state.lang='en';document.documentElement.lang=state.lang;$('languageSelect').value=state.lang;document.querySelector('.topbar h1').textContent=t('title');document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));const pickerEyebrow=document.querySelector('#currencySheet .eyebrow');if(pickerEyebrow)pickerEyebrow.textContent=t('currencies');$('sheetTitle').textContent=t('chooseCurrency');$('currencySearch').placeholder=t('currencySearch');renderCurrencies();if($('currencySheet').classList.contains('open'))renderCurrencyList($('currencySearch').value)}
 function parseValue(value){return Number(String(value).replace(/\s/g,'').replace(',','.')) || 0}
 function evaluateExpression(expression){
   const clean=String(expression).replace(/[\s\u00a0]/g,'').replace(/,/g,'.').replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
@@ -96,20 +96,18 @@ function renderCurrencies(){
   document.querySelectorAll('.pair-chip').forEach(b=>b.classList.toggle('active',b.dataset.pair===`${state.from}_${state.to}`));
 }
 function calculate(source=state.activeInput,animate=true){
-  if(state.rate===null){$(source==='from'?'toAmount':'fromAmount').value='—';$('rateText').textContent='—';renderTravel();renderMarket();return}
-  if(!$(source==='from'?'fromAmount':'toAmount').value.trim()){$(source==='from'?'toAmount':'fromAmount').value='';$('rateText').textContent=`1 ${state.from} = ${format(state.rate,'',false)} ${state.to}`;renderTravel();renderMarket();updateResetButton();return}
+  if(state.rate===null){$(source==='from'?'toAmount':'fromAmount').value='—';$('rateText').textContent='—';renderTravel();return}
+  if(!$(source==='from'?'fromAmount':'toAmount').value.trim()){$(source==='from'?'toAmount':'fromAmount').value='';$('rateText').textContent=`1 ${state.from} = ${format(state.rate,'',false)} ${state.to}`;renderTravel();updateResetButton();return}
   if(source==='from'){$('toAmount').value=formatInput(amountValue($('fromAmount').value)*state.rate)}
   else {$('fromAmount').value=formatInput(amountValue($('toAmount').value)/state.rate)}
   $('rateText').textContent=`1 ${state.from} = ${format(state.rate,'',false)} ${state.to}`;
   if(animate){const el=source==='from'?$('toAmount'):$('fromAmount');el.classList.remove('value-pop');void el.offsetWidth;el.classList.add('value-pop')}
   renderTravel();
-  renderMarket();
   updateResetButton();
 }
 async function loadRate(showToast=false){
   const requestId=++rateRequestId;rateController?.abort();rateController=new AbortController();
   const {from,to}=state;const current=()=>requestId===rateRequestId&&state.from===from&&state.to===to;
-  cashController?.abort();++cashRequestId;state.cashRate=null;state.cashKind=null;
   state.rate=null;state.rateSource='unavailable';state.rateDate=null;state.receivedAt=null;calculate(state.activeInput,false);
   $('refreshButton').classList.add('loading');$('networkStatus').textContent=t('updating');$('statusDot').className='';
   if(from===to){state.rate=1;state.rateSource='same';finishRate();return}
@@ -125,22 +123,7 @@ async function loadRate(showToast=false){
     finishRate();if(showToast)toast(cached?t('savedRate'):t('rateUnavailable'));
   }
 }
-function finishRate(){const source=state.rateSource;$('refreshButton').classList.remove('loading');$('statusDot').className=source==='live'||source==='same'?'online':'offline';$('networkStatus').textContent=source==='live'?t('fresh'):source==='saved'?t('savedRate'):source==='same'?t('sameCurrency'):t('rateUnavailable');$('updatedAt').textContent=source==='unavailable'?t('noRate'):source==='same'?'1:1':[rateDateLabel(state.rateDate),state.receivedAt?`${t('received')} ${ageLabel(state.receivedAt)}`:''].filter(Boolean).join(' · ');calculate(state.activeInput,false);loadCashBenchmark()}
-
-async function loadCashBenchmark(){const requestId=++cashRequestId;cashController?.abort();cashController=new AbortController();const {from,to}=state;const current=()=>requestId===cashRequestId&&state.from===from&&state.to===to&&$('marketCountry').value==='PL';state.cashRate=null;state.cashKind=null;if($('marketCountry').value!=='PL'||state.rateSource!=='live'||(from!=='PLN'&&to!=='PLN')){renderMarket();return}const foreign=from==='PLN'?to:from;if(foreign==='PLN'){renderMarket();return}try{const response=await fetch(`https://api.nbp.pl/api/exchangerates/rates/c/${foreign}/?format=json`,{cache:'no-store',signal:cashController.signal});if(!response.ok)throw new Error();const item=(await response.json()).rates[0];if(!current())return;const rate=to==='PLN'?item.bid:1/item.ask;if(!Number.isFinite(rate)||rate<=0)throw new Error('Invalid cash rate');state.cashRate=rate;state.cashKind=to==='PLN'?'buy':'sell';renderMarket()}catch{if(current())renderMarket()}}
-function renderMarket(){
-  if(!$('marketCountry'))return;const manual=$('marketCountry').value==='manual';
-  $('manualMarket').classList.toggle('hidden',!manual);$('marketAvailable').classList.toggle('hidden',manual);$('marketNote').classList.toggle('hidden',manual);
-  const manualLabel=$('manualMarket').querySelector('label span');if(manualLabel)manualLabel.textContent=`${t('officeRate')} · 1 ${state.from} = ? ${state.to}`;
-  $('marketSource').textContent=manual?t('manualSource'):'NBP · Table C';
-  if(manual){const rate=parseValue($('manualRate').value);state.cashRate=rate||null;renderDifference();return}
-  $('onlineRateValue').textContent=state.rate===null?'—':`${format(state.rate)} ${state.to}`;
-  if(state.rateSource==='saved'){$('cashRateValue').textContent='—';$('differenceText').textContent=t('comparisonNeedsFresh');$('differenceText').className='';return}
-  if(state.rate===null){$('cashRateValue').textContent='—';$('differenceText').textContent=t('rateUnavailable');$('differenceText').className='';return}
-  if(!state.cashRate){$('cashRateValue').textContent='—';$('differenceText').textContent=t('unavailable');$('differenceText').className='';return}
-  $('cashRateValue').textContent=`${format(state.cashRate)} ${state.to} · ${t(state.cashKind)}`;renderDifference()
-}
-function renderDifference(){if(state.rateSource==='saved'){$('differenceText').textContent=t('comparisonNeedsFresh');$('differenceText').className='';return}if(!state.cashRate||state.rate===null){$('differenceText').textContent='—';$('differenceText').className='';return}const amount=amountValue($('fromAmount').value);const cash=amount*state.cashRate,online=amount*state.rate,diff=cash-online,pct=online?diff/online*100:0;$('differenceText').textContent=`${t('difference')}: ${diff>=0?'+':''}${format(diff)} ${state.to} (${pct>=0?'+':''}${pct.toFixed(2)}%)`;$('differenceText').className=diff>=0?'positive':'negative'}
+function finishRate(){const source=state.rateSource;$('refreshButton').classList.remove('loading');$('statusDot').className=source==='live'||source==='same'?'online':'offline';$('networkStatus').textContent=source==='live'?t('fresh'):source==='saved'?t('savedRate'):source==='same'?t('sameCurrency'):t('rateUnavailable');$('updatedAt').textContent=source==='unavailable'?t('noRate'):source==='same'?'1:1':[rateDateLabel(state.rateDate),state.receivedAt?`${t('received')} ${ageLabel(state.receivedAt)}`:''].filter(Boolean).join(' · ');calculate(state.activeInput,false)}
 
 function createFavorites(){
   $('favorites').innerHTML=QUICK_PAIRS.filter(([a,b])=>activeCurrencies.includes(a)&&activeCurrencies.includes(b)).map(([a,b])=>`<button class="pair-chip" data-pair="${a}_${b}">${meta(a).flag} ${a} <span>→</span> ${b}</button>`).join('');
@@ -174,8 +157,7 @@ function installCurrencyPickerUX(){
     #resetButton{margin-left:auto;margin-right:6px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
   `;document.head.appendChild(style);
   const viewport=document.querySelector('meta[name="viewport"]');if(viewport)viewport.content='width=device-width, initial-scale=1, viewport-fit=cover';
-  const resultLine=document.querySelector('#marketAvailable .difference-line');if(resultLine&&$('manualMarket'))$('manualMarket').after(resultLine);
-  const version=document.querySelector('footer span:last-child');if(version)version.textContent='v2.7';
+  const version=document.querySelector('footer span:last-child');if(version)version.textContent='v2.8';
 }
 function openSheet(side){
   state.pickerSide=side;pickerMode='select';pickerEdit=false;currencySheetReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;$('currencySearch').value='';renderCurrencyList();$('currencySheet').classList.add('open');$('sheetBackdrop').classList.add('open');document.body.style.overflow='hidden';
@@ -214,10 +196,8 @@ function selectCurrency(code){const other=state.pickerSide==='from'?'to':'from';
 function animateSwap(){[$('fromBlock'),$('toBlock')].forEach(el=>{el.classList.remove('block-swap');void el.offsetWidth;el.classList.add('block-swap')})}
 function swap(){const oldFrom=amountValue($('fromAmount').value);[state.from,state.to]=[state.to,state.from];state.activeInput='from';$('fromAmount').value=state.rate===null?formatInput(oldFrom):formatInput(amountValue($('toAmount').value));$('swapButton').classList.toggle('spinning');animateSwap();renderCurrencies();save();loadRate()}
 function openCalculator(side){calculatorReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;calcSide=side;const raw=$(`${side}Amount`).value.replace(/[\s\u00a0]/g,'').replace(',','.');calcExpression=evaluateExpression(raw)===null?'0':raw;$('calcCurrency').textContent=state[side];renderCalculator();$('calculatorSheet').classList.add('open');$('calcBackdrop').classList.add('open');document.body.style.overflow='hidden';setTimeout(()=>$('closeCalculator').focus({preventScroll:true}),60)}
-function closeCalculator(){$('calculatorSheet').classList.remove('open');$('calcBackdrop').classList.remove('open');if(!$('currencySheet').classList.contains('open')&&!$('marketSheet').classList.contains('open'))document.body.style.overflow='';if(calculatorReturnFocus?.isConnected)calculatorReturnFocus.focus({preventScroll:true});calculatorReturnFocus=null}
-function openMarket(){marketReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;$('marketSheet').classList.add('open');$('marketBackdrop').classList.add('open');document.body.style.overflow='hidden';renderMarket();loadCashBenchmark();setTimeout(()=>$('closeMarket').focus({preventScroll:true}),60)}
-function closeMarket(){$('marketSheet').classList.remove('open');$('marketBackdrop').classList.remove('open');if(!$('currencySheet').classList.contains('open')&&!$('calculatorSheet').classList.contains('open'))document.body.style.overflow='';if(marketReturnFocus?.isConnected)marketReturnFocus.focus({preventScroll:true});marketReturnFocus=null}
-function openDialogElement(){if($('calculatorSheet').classList.contains('open'))return $('calculatorSheet');if($('marketSheet').classList.contains('open'))return $('marketSheet');if($('currencySheet').classList.contains('open'))return $('currencySheet');return null}
+function closeCalculator(){$('calculatorSheet').classList.remove('open');$('calcBackdrop').classList.remove('open');if(!$('currencySheet').classList.contains('open'))document.body.style.overflow='';if(calculatorReturnFocus?.isConnected)calculatorReturnFocus.focus({preventScroll:true});calculatorReturnFocus=null}
+function openDialogElement(){if($('calculatorSheet').classList.contains('open'))return $('calculatorSheet');if($('currencySheet').classList.contains('open'))return $('currencySheet');return null}
 function trapDialogFocus(event){if(event.key!=='Tab')return false;const dialog=openDialogElement();if(!dialog)return false;const focusable=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')].filter(el=>el.getClientRects().length);if(!focusable.length)return false;const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();return true}if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();return true}return false}
 function calcDisplayExpression(value){return value.replace(/\*/g,' × ').replace(/\//g,' ÷ ').replace(/-/g,' − ').replace(/\+/g,' + ').replace(/\./g,',')}
 function renderCalculator(){const result=evaluateExpression(calcExpression);$('calcExpression').textContent=calcDisplayExpression(calcExpression);$('calcResult').textContent=result===null?'—':new Intl.NumberFormat(state.lang,{maximumFractionDigits:6}).format(result);$('calcResult').parentElement.classList.toggle('invalid',result===null);$('calcCurrency').textContent=state[calcSide];$('calcHistory').innerHTML=calcHistory.length?calcHistory.map((item,i)=>`<button data-history="${i}">${calcDisplayExpression(item.expression)} = ${new Intl.NumberFormat(state.lang,{maximumFractionDigits:2}).format(item.result)}</button>`).join(''):`<span class="calc-empty">${t('emptyHistory')}</span>`}
@@ -240,14 +220,12 @@ function bind(){
   $('currencySearch').addEventListener('input',e=>renderCurrencyList(e.target.value));$('currencySheet').addEventListener('click',e=>{const action=e.target.closest('[data-picker-action]');if(action)handlePickerAction(action.dataset.pickerAction)});$('currencyList').addEventListener('click',e=>{const add=e.target.closest('[data-add-code]');if(add){addCurrency(add.dataset.addCode);return}const rm=e.target.closest('[data-remove-code]');if(rm){removeCurrency(rm.dataset.removeCode);return}const favorite=e.target.closest('.currency-favorite');if(favorite){toggleFavoriteCurrency(favorite.dataset.favoriteCode);return}const b=e.target.closest('.currency-option');if(b)selectCurrency(b.dataset.code)});
   ['from','to'].forEach(side=>{$(`${side}Amount`).addEventListener('focus',e=>{state.activeInput=side;e.target.select()});$(`${side}Amount`).addEventListener('input',()=>{state.activeInput=side;clearTimeout(inputTimer);inputTimer=setTimeout(()=>calculate(side),45)});$(`${side}Amount`).addEventListener('blur',e=>{const result=evaluateExpression(e.target.value);if(result!==null&&/[+\-*/%()]/.test(e.target.value)){e.target.value=formatInput(result);calculate(side)}})});
   document.querySelectorAll('.calc-trigger').forEach(button=>button.addEventListener('click',()=>openCalculator(button.dataset.side)));$('closeCalculator').onclick=closeCalculator;$('calcBackdrop').onclick=closeCalculator;$('calcKeypad').addEventListener('click',e=>{const button=e.target.closest('[data-key]');if(button)handleCalcKey(button.dataset.key)});$('clearHistory').onclick=()=>{calcHistory=[];localStorage.removeItem('glassCurrencyCalcHistory');renderCalculator()};$('calcHistory').addEventListener('click',e=>{const button=e.target.closest('[data-history]');if(!button)return;calcExpression=calcHistory[Number(button.dataset.history)].expression;renderCalculator()});
-  $('compareTrigger').onclick=openMarket;$('closeMarket').onclick=closeMarket;$('marketBackdrop').onclick=closeMarket;
   $('swapButton').onclick=swap;$('refreshButton').onclick=()=>loadRate(true);
   $('travelToggle').addEventListener('change',e=>{const open=e.target.checked;$('travelContent').classList.toggle('open',open);$('travelContent').setAttribute('aria-hidden',String(!open));save();if(open)toast('Travel Mode включён')});
   $('quickValues').addEventListener('click',e=>{const b=e.target.closest('.quick-button');if(!b)return;$('fromAmount').value=b.dataset.value;state.activeInput='from';calculate('from');navigator.vibrate?.(12)});
   $('themeButton').onclick=()=>{document.body.classList.toggle('light');$('themeIcon').textContent=document.body.classList.contains('light')?'☀':'☾';document.querySelector('meta[name="theme-color"]').content=document.body.classList.contains('light')?'#e8eef9':'#111c39';save()};
   $('languageSelect').addEventListener('change',e=>{state.lang=e.target.value;applyLanguage();save()});
-  $('marketCountry').addEventListener('change',()=>{state.cashRate=null;renderMarket();loadCashBenchmark()});$('manualRate').addEventListener('input',renderMarket);
-  document.addEventListener('keydown',e=>{if(trapDialogFocus(e))return;if(!$('calculatorSheet').classList.contains('open')){if(e.key==='Escape'){$('marketSheet').classList.contains('open')?closeMarket():closeSheet()}return}if(e.key==='Escape'){closeCalculator();return}if(e.key==='Enter'||e.key==='='){e.preventDefault();applyCalculation();return}const map={Backspace:'backspace',Delete:'clear',',':'.'};const key=map[e.key]||e.key;if(/^[0-9.+\-*/%()]$/.test(key)){e.preventDefault();handleCalcKey(key)}});
+  document.addEventListener('keydown',e=>{if(trapDialogFocus(e))return;if(!$('calculatorSheet').classList.contains('open')){if(e.key==='Escape')closeSheet();return}if(e.key==='Escape'){closeCalculator();return}if(e.key==='Enter'||e.key==='='){e.preventDefault();applyCalculation();return}const map={Backspace:'backspace',Delete:'clear',',':'.'};const key=map[e.key]||e.key;if(/^[0-9.+\-*/%()]$/.test(key)){e.preventDefault();handleCalcKey(key)}});
   window.addEventListener('online',()=>loadRate());window.addEventListener('offline',()=>loadRate());
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installButton').classList.remove('hidden')});$('installButton').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('installButton').classList.add('hidden')};
 }
@@ -256,7 +234,7 @@ function init(){
   if(saved.theme==='light'){document.body.classList.add('light');$('themeIcon').textContent='☀'}
   const travel=params.get('travel')==='1'||saved.travel===true;$('travelToggle').checked=travel;$('travelContent').classList.toggle('open',travel);$('travelContent').setAttribute('aria-hidden',String(!travel));
   installCurrencyPickerUX();ensureResetButton();createFavorites();bind();bindReset();applyLanguage();renderCurrencies();renderTravel();loadRate();save();loadCatalog();
-  if(params.get('calculator')==='1')setTimeout(()=>openCalculator('from'),250);if(params.get('compare')==='1')setTimeout(openMarket,250);
+  if(params.get('calculator')==='1')setTimeout(()=>openCalculator('from'),250);
   if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 }
 init();
