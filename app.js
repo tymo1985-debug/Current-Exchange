@@ -13,6 +13,19 @@ const CURRENCIES = {
 const QUICK_PAIRS = [['EUR','PLN'],['EUR','CZK'],['PLN','CZK'],['EUR','USD'],['USD','PLN']];
 const DEFAULT_FAVORITE_CURRENCIES = ['EUR','CZK','PLN','USD'];
 const MAX_RECENT_CURRENCIES = 6;
+const MIN_ACTIVE_CURRENCIES = 2;
+const DEFAULT_ACTIVE_CURRENCIES = Object.keys(CURRENCIES);
+const CATALOG_KEY = 'glassCurrencyCatalog';
+const CATALOG_TTL = 7*24*3600*1000;
+const FLAG_OVERRIDES = {EUR:'🇪🇺',XAF:'🌍',XOF:'🌍',XCD:'🌎',XPF:'🌏',XDR:'🏦',ANG:'🇨🇼'};
+const isCode = code => typeof code==='string' && /^[A-Z]{3}$/.test(code);
+function flagFor(code){if(FLAG_OVERRIDES[code])return FLAG_OVERRIDES[code];if(code.startsWith('X'))return '💱';return String.fromCodePoint(...[...code.slice(0,2)].map(c=>0x1F1E6+c.charCodeAt(0)-65))}
+function symbolFor(code){try{const part=new Intl.NumberFormat('en',{style:'currency',currency:code,currencyDisplay:'narrowSymbol'}).formatToParts(1).find(p=>p.type==='currency');return part?.value||code}catch{return code}}
+function meta(code){if(!CURRENCIES[code]&&isCode(code))CURRENCIES[code]={name:code,flag:flagFor(code),symbol:symbolFor(code)};return CURRENCIES[code]||{name:code,flag:'💱',symbol:code}}
+function readCatalog(){try{const v=JSON.parse(localStorage.getItem(CATALOG_KEY));return v&&Array.isArray(v.codes)?v:null}catch{return null}}
+let catalogCodes=(()=>{const c=readCatalog();return [...new Set([...DEFAULT_ACTIVE_CURRENCIES,...(c?c.codes.filter(isCode):[])])].sort()})();
+function parseCatalog(data){let codes=[];if(Array.isArray(data))codes=data.map(i=>typeof i==='string'?i:(i?.iso_code||i?.code||i?.currency));else if(data&&typeof data==='object')codes=Object.keys(data);return [...new Set(codes.filter(isCode).map(c=>c.toUpperCase()))]}
+async function loadCatalog(force=false){const c=readCatalog();if(!force&&c&&Date.now()-c.fetchedAt<CATALOG_TTL)return;for(const url of ['https://api.frankfurter.dev/v2/currencies','https://api.frankfurter.dev/v1/currencies']){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)continue;const codes=parseCatalog(await r.json());if(codes.length<5)continue;localStorage.setItem(CATALOG_KEY,JSON.stringify({codes,fetchedAt:Date.now()}));catalogCodes=[...new Set([...DEFAULT_ACTIVE_CURRENCIES,...codes])].sort();if($('currencySheet').classList.contains('open'))renderCurrencyList($('currencySearch').value);return}catch{}}}
 const I18N={
  ru:{title:'Конвертер',updating:'Обновляем курс…',fresh:'Курс актуален',offline:'Офлайн · сохранённый курс',updated:'обновлено',cashEyebrow:'НАЛИЧНЫЙ ОБМЕН',cashTitle:'Ориентир по стране',otherCountry:'🌍 Другая страна',onlineRate:'Онлайн-курс',cashRate:'Покупка / продажа',manualHint:'Введите курс, указанный в обменном пункте, чтобы увидеть разницу.',officeRate:'Курс обменника',marketNote:'Это официальный ориентир покупки/продажи, а не гарантированное предложение конкретного обменника.',travelSubtitle:'Цены без лишнего набора',difference:'Разница',unavailable:'Для этой пары нет официального наличного ориентира',buy:'покупка',sell:'продажа',calculatorEyebrow:'БЫСТРЫЙ РАСЧЁТ',calculator:'Калькулятор',history:'История',clear:'Очистить',applyResult:'Использовать результат',emptyHistory:'Пока пусто'},
  uk:{title:'Конвертер',updating:'Оновлюємо курс…',fresh:'Курс актуальний',offline:'Офлайн · збережений курс',updated:'оновлено',cashEyebrow:'ГОТІВКОВИЙ ОБМІН',cashTitle:'Орієнтир за країною',otherCountry:'🌍 Інша країна',onlineRate:'Онлайн-курс',cashRate:'Купівля / продаж',manualHint:'Введіть курс, указаний в обмінному пункті, щоб побачити різницю.',officeRate:'Курс обмінника',marketNote:'Це офіційний орієнтир купівлі/продажу, а не гарантована пропозиція конкретного обмінника.',travelSubtitle:'Ціни без зайвого набору',difference:'Різниця',unavailable:'Для цієї пари немає офіційного готівкового орієнтира',buy:'купівля',sell:'продаж',calculatorEyebrow:'ШВИДКИЙ РОЗРАХУНОК',calculator:'Калькулятор',history:'Історія',clear:'Очистити',applyResult:'Використати результат',emptyHistory:'Поки порожньо'},
@@ -31,6 +44,10 @@ Object.assign(I18N.ru,{savedRate:'Сохранённый курс',rateUnavailab
 Object.assign(I18N.uk,{savedRate:'Збережений курс',rateUnavailable:'Курс недоступний',dataDate:'дані за',received:'отримано',noRate:'Немає збереженого курсу'});
 Object.assign(I18N.de,{savedRate:'Gespeicherter Kurs',rateUnavailable:'Kurs nicht verfügbar',dataDate:'Daten vom',received:'abgerufen',noRate:'Kein gespeicherter Kurs'});
 Object.assign(I18N.en,{savedRate:'Saved rate',rateUnavailable:'Rate unavailable',dataDate:'data for',received:'received',noRate:'No saved rate'});
+Object.assign(I18N.ru,{myCurrencies:'МОИ ВАЛЮТЫ',addCurrency:'＋ Добавить валюту',editList:'Изменить',doneEdit:'Готово',addCurrencyTitle:'Добавить валюту',removeHint:'Удалить',cannotRemoveActive:'Эта валюта сейчас выбрана',minCurrencies:'Нужно минимум 2 валюты',added:'добавлена',removed:'удалена',allAdded:'Все валюты уже добавлены',back:'← Назад'});
+Object.assign(I18N.uk,{myCurrencies:'МОЇ ВАЛЮТИ',addCurrency:'＋ Додати валюту',editList:'Змінити',doneEdit:'Готово',addCurrencyTitle:'Додати валюту',removeHint:'Видалити',cannotRemoveActive:'Ця валюта зараз вибрана',minCurrencies:'Потрібно щонайменше 2 валюти',added:'додано',removed:'видалено',allAdded:'Усі валюти вже додано',back:'← Назад'});
+Object.assign(I18N.de,{myCurrencies:'MEINE WÄHRUNGEN',addCurrency:'＋ Währung hinzufügen',editList:'Bearbeiten',doneEdit:'Fertig',addCurrencyTitle:'Währung hinzufügen',removeHint:'Entfernen',cannotRemoveActive:'Diese Währung ist gerade ausgewählt',minCurrencies:'Mindestens 2 Währungen nötig',added:'hinzugefügt',removed:'entfernt',allAdded:'Alle Währungen sind bereits hinzugefügt',back:'← Zurück'});
+Object.assign(I18N.en,{myCurrencies:'MY CURRENCIES',addCurrency:'＋ Add currency',editList:'Edit',doneEdit:'Done',addCurrencyTitle:'Add currency',removeHint:'Remove',cannotRemoveActive:'This currency is currently selected',minCurrencies:'At least 2 currencies required',added:'added',removed:'removed',allAdded:'All currencies are already added',back:'← Back'});
 Object.assign(I18N.ru,{sameCurrency:'Одинаковая валюта',comparisonNeedsFresh:'Обновите онлайн-курс для сравнения',manualSource:'Вручную'});
 Object.assign(I18N.uk,{sameCurrency:'Однакова валюта',comparisonNeedsFresh:'Оновіть онлайн-курс для порівняння',manualSource:'Вручну'});
 Object.assign(I18N.de,{sameCurrency:'Gleiche Währung',comparisonNeedsFresh:'Onlinekurs für den Vergleich aktualisieren',manualSource:'Manuell'});
@@ -39,16 +56,19 @@ const $ = id => document.getElementById(id);
 const saved = JSON.parse(localStorage.getItem('glassCurrencyState') || '{}');
 const params = new URLSearchParams(location.search);
 const state = {from:params.get('from') || saved.from || 'EUR',to:params.get('to') || saved.to || 'PLN',rate:null,rateSource:'unavailable',rateDate:null,receivedAt:null,cashRate:null,cashKind:null,activeInput:'from',pickerSide:'from',lang:saved.lang||((navigator.language||'ru').slice(0,2))};
-function normalizeCurrencyCodes(list){return [...new Set((Array.isArray(list)?list:[]).filter(code=>CURRENCIES[code]))]}
+function normalizeCurrencyCodes(list){return [...new Set((Array.isArray(list)?list:[]).filter(isCode))]}
+let activeCurrencies=Array.isArray(saved.activeCurrencies)?normalizeCurrencyCodes(saved.activeCurrencies):[...DEFAULT_ACTIVE_CURRENCIES];
+if(activeCurrencies.length<MIN_ACTIVE_CURRENCIES)activeCurrencies=[...DEFAULT_ACTIVE_CURRENCIES];
+let pickerMode='select',pickerEdit=false;
 let favoriteCurrencies=Array.isArray(saved.favoriteCurrencies)?normalizeCurrencyCodes(saved.favoriteCurrencies):[...DEFAULT_FAVORITE_CURRENCIES];
 let recentCurrencies=normalizeCurrencyCodes(saved.recentCurrencies).slice(0,MAX_RECENT_CURRENCIES);
 let currencySheetReturnFocus=null, calculatorReturnFocus=null, marketReturnFocus=null;
 let installPrompt, inputTimer, rateRequestId=0, rateController=null, cashRequestId=0, cashController=null;
 let calcSide='from',calcExpression='0',calcHistory=JSON.parse(localStorage.getItem('glassCurrencyCalcHistory')||'[]');
 
-function save(){localStorage.setItem('glassCurrencyState',JSON.stringify({from:state.from,to:state.to,travel:$('travelToggle').checked,theme:document.body.classList.contains('light')?'light':'dark',lang:state.lang,favoriteCurrencies,recentCurrencies}))}
+function save(){localStorage.setItem('glassCurrencyState',JSON.stringify({from:state.from,to:state.to,travel:$('travelToggle').checked,theme:document.body.classList.contains('light')?'light':'dark',lang:state.lang,favoriteCurrencies,recentCurrencies,activeCurrencies}))}
 function t(key){return (I18N[state.lang]||I18N.ru)[key]||I18N.ru[key]||key}
-function currencyName(code){try{return new Intl.DisplayNames([state.lang],{type:'currency'}).of(code)||CURRENCIES[code].name}catch{return CURRENCIES[code].name}}
+function currencyName(code){try{return new Intl.DisplayNames([state.lang],{type:'currency'}).of(code)||meta(code).name}catch{return meta(code).name}}
 function applyLanguage(){if(!I18N[state.lang])state.lang='en';document.documentElement.lang=state.lang;$('languageSelect').value=state.lang;document.querySelector('.topbar h1').textContent=t('title');document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));const pickerEyebrow=document.querySelector('#currencySheet .eyebrow');if(pickerEyebrow)pickerEyebrow.textContent=t('currencies');$('sheetTitle').textContent=t('chooseCurrency');$('currencySearch').placeholder=t('currencySearch');renderCurrencies();if($('currencySheet').classList.contains('open'))renderCurrencyList($('currencySearch').value);renderMarket()}
 function parseValue(value){return Number(String(value).replace(/\s/g,'').replace(',','.')) || 0}
 function evaluateExpression(expression){
@@ -68,7 +88,7 @@ function getCached(){try{const value=JSON.parse(localStorage.getItem(cacheKey())
 function rateDateLabel(value){if(!value)return '';const date=new Date(`${value}T12:00:00`);const label=Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat(state.lang,{dateStyle:'medium'}).format(date);return `${t('dataDate')} ${label}`}
 
 function renderCurrencies(){
-  ['from','to'].forEach(side=>{const code=state[side],item=CURRENCIES[code];$(`${side}Code`).textContent=code;$(`${side}Name`).textContent=currencyName(code);$(`${side}Flag`).textContent=item.flag;$(`${side}Symbol`).textContent=item.symbol});
+  ['from','to'].forEach(side=>{const code=state[side],item=meta(code);$(`${side}Code`).textContent=code;$(`${side}Name`).textContent=currencyName(code);$(`${side}Flag`).textContent=item.flag;$(`${side}Symbol`).textContent=item.symbol});
   document.querySelectorAll('.pair-chip').forEach(b=>b.classList.toggle('active',b.dataset.pair===`${state.from}_${state.to}`));
 }
 function calculate(source=state.activeInput,animate=true){
@@ -117,11 +137,12 @@ function renderMarket(){
 function renderDifference(){if(state.rateSource==='saved'){$('differenceText').textContent=t('comparisonNeedsFresh');$('differenceText').className='';return}if(!state.cashRate||state.rate===null){$('differenceText').textContent='—';$('differenceText').className='';return}const amount=amountValue($('fromAmount').value);const cash=amount*state.cashRate,online=amount*state.rate,diff=cash-online,pct=online?diff/online*100:0;$('differenceText').textContent=`${t('difference')}: ${diff>=0?'+':''}${format(diff)} ${state.to} (${pct>=0?'+':''}${pct.toFixed(2)}%)`;$('differenceText').className=diff>=0?'positive':'negative'}
 
 function createFavorites(){
-  $('favorites').innerHTML=QUICK_PAIRS.map(([a,b])=>`<button class="pair-chip" data-pair="${a}_${b}">${CURRENCIES[a].flag} ${a} <span>→</span> ${b}</button>`).join('');
+  $('favorites').innerHTML=QUICK_PAIRS.filter(([a,b])=>activeCurrencies.includes(a)&&activeCurrencies.includes(b)).map(([a,b])=>`<button class="pair-chip" data-pair="${a}_${b}">${meta(a).flag} ${a} <span>→</span> ${b}</button>`).join('');
+  if(createFavorites.bound)return;createFavorites.bound=true;
   $('favorites').addEventListener('click',e=>{const button=e.target.closest('.pair-chip');if(!button)return;[state.from,state.to]=button.dataset.pair.split('_');state.activeInput='from';animateSwap();renderCurrencies();save();loadRate()});
 }
 function renderTravel(){
-  const values=[1,5,10,20,50,100];$('quickValues').innerHTML=values.map(v=>`<button class="quick-button" data-value="${v}">${CURRENCIES[state.from].symbol}${v}</button>`).join('');
+  const values=[1,5,10,20,50,100];$('quickValues').innerHTML=values.map(v=>`<button class="quick-button" data-value="${v}">${meta(state.from).symbol}${v}</button>`).join('');
   $('travelList').innerHTML=values.slice(1).map(v=>`<div class="travel-row"><span>${format(v,'',true)} ${state.from}</span><b>${state.rate===null?'—':format(v*state.rate,'',false)} ${state.to}</b></div>`).join('');
 }
 function installCurrencyPickerUX(){
@@ -139,13 +160,18 @@ function installCurrencyPickerUX(){
     .currency-option:focus-visible,.currency-favorite:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
     .search-box:focus-within{border-color:rgba(125,211,252,.55);box-shadow:0 0 0 3px rgba(125,211,252,.08)}
     .currency-empty{padding:9px 3px 18px}
+    .currency-toolbar{display:flex;gap:8px;margin:0 0 8px}
+    .currency-toolbar button{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.065);color:var(--accent);border-radius:13px;padding:10px 12px;font-weight:700;font-size:13px}
+    .currency-toolbar button:last-child:not(:first-child){flex:0 0 auto}
+    .currency-remove{width:40px;height:40px;border:0;border-radius:13px;background:rgba(251,113,133,.1);color:#fb7185;font-size:17px;display:grid;place-items:center}
+    .currency-remove.locked{opacity:.3}
   `;document.head.appendChild(style);
   const viewport=document.querySelector('meta[name="viewport"]');if(viewport)viewport.content='width=device-width, initial-scale=1, viewport-fit=cover';
   const resultLine=document.querySelector('#marketAvailable .difference-line');if(resultLine&&$('manualMarket'))$('manualMarket').after(resultLine);
-  const version=document.querySelector('footer span:last-child');if(version)version.textContent='v2.5';
+  const version=document.querySelector('footer span:last-child');if(version)version.textContent='v2.6';
 }
 function openSheet(side){
-  state.pickerSide=side;currencySheetReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;$('currencySearch').value='';renderCurrencyList();$('currencySheet').classList.add('open');$('sheetBackdrop').classList.add('open');document.body.style.overflow='hidden';
+  state.pickerSide=side;pickerMode='select';pickerEdit=false;currencySheetReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;$('currencySearch').value='';renderCurrencyList();$('currencySheet').classList.add('open');$('sheetBackdrop').classList.add('open');document.body.style.overflow='hidden';
   setTimeout(()=>$('closeSheet').focus({preventScroll:true}),60);
 }
 function closeSheet(){
@@ -153,17 +179,29 @@ function closeSheet(){
   if(currencySheetReturnFocus?.isConnected)currencySheetReturnFocus.focus({preventScroll:true});currencySheetReturnFocus=null;
 }
 function currencyOptionMarkup(code){
-  const v=CURRENCIES[code],selected=state[state.pickerSide]===code,favorite=favoriteCurrencies.includes(code),favoriteLabel=favorite?t('unfavoriteHint'):t('favoriteHint');
+  const v=meta(code);
+  if(pickerMode==='catalog')return `<div class="currency-option-row"><button class="currency-option" data-add-code="${code}"><span class="flag">${v.flag}</span><span><b>${code}</b><small>${currencyName(code)}</small></span><span class="check">＋</span></button><span></span></div>`;
+  const selected=state[state.pickerSide]===code;
+  if(pickerEdit){const locked=state.from===code||state.to===code;return `<div class="currency-option-row"><div class="currency-option"><span class="flag">${v.flag}</span><span><b>${code}</b><small>${currencyName(code)}</small></span><span class="check">${selected?'✓':''}</span></div><button class="currency-remove${locked?' locked':''}" data-remove-code="${code}" aria-label="${t('removeHint')}: ${code}">✕</button></div>`}
+  const favorite=favoriteCurrencies.includes(code),favoriteLabel=favorite?t('unfavoriteHint'):t('favoriteHint');
   return `<div class="currency-option-row"><button class="currency-option" data-code="${code}"><span class="flag">${v.flag}</span><span><b>${code}</b><small>${currencyName(code)}</small></span><span class="check">${selected?'✓':''}</span></button><button class="currency-favorite${favorite?' active':''}" data-favorite-code="${code}" aria-pressed="${favorite}" aria-label="${favoriteLabel}: ${code}">${favorite?'★':'☆'}</button></div>`;
 }
 function currencyGroupMarkup(label,codes){return codes.length?`<section class="currency-group"><div class="currency-group-label">${label}</div>${codes.map(currencyOptionMarkup).join('')}</section>`:''}
+function matchesQuery(code,q){return code.toLowerCase().includes(q)||currencyName(code).toLocaleLowerCase(state.lang).includes(q)||meta(code).name.toLocaleLowerCase('ru').includes(q)}
+function renderPickerHeader(){$('sheetTitle').textContent=pickerMode==='catalog'?t('addCurrencyTitle'):t('chooseCurrency');let bar=$('currencyToolbar');if(!bar){bar=document.createElement('div');bar.id='currencyToolbar';bar.className='currency-toolbar';$('currencyList').before(bar)}bar.innerHTML=pickerMode==='catalog'?`<button data-picker-action="back">${t('back')}</button>`:`<button data-picker-action="add">${t('addCurrency')}</button><button data-picker-action="edit">${pickerEdit?t('doneEdit'):t('editList')}</button>`}
 function renderCurrencyList(query=''){
-  const q=query.trim().toLocaleLowerCase('ru'),allCodes=Object.keys(CURRENCIES);
-  if(q){const matches=allCodes.filter(code=>code.toLowerCase().includes(q)||currencyName(code).toLocaleLowerCase(state.lang).includes(q)||CURRENCIES[code].name.toLocaleLowerCase('ru').includes(q));$('currencyList').innerHTML=matches.length?currencyGroupMarkup(t('allCurrencies'),matches):`<p class="offline-note currency-empty">${t('currencyNotFound')}</p>`;return}
-  const favorites=favoriteCurrencies.filter(code=>CURRENCIES[code]),recents=recentCurrencies.filter(code=>CURRENCIES[code]&&!favorites.includes(code)),remaining=allCodes.filter(code=>!favorites.includes(code)&&!recents.includes(code));
-  $('currencyList').innerHTML=currencyGroupMarkup(t('favoriteCurrencies'),favorites)+currencyGroupMarkup(t('recentCurrencies'),recents)+currencyGroupMarkup(t('allCurrencies'),remaining);
+  renderPickerHeader();const q=query.trim().toLocaleLowerCase('ru');
+  if(pickerMode==='catalog'){const pool=catalogCodes.filter(c=>!activeCurrencies.includes(c));const list=q?pool.filter(c=>matchesQuery(c,q)):pool;$('currencyList').innerHTML=list.length?currencyGroupMarkup(t('allCurrencies'),list):`<p class="offline-note currency-empty">${pool.length?t('currencyNotFound'):t('allAdded')}</p>`;return}
+  const allCodes=activeCurrencies;
+  if(q){const matches=allCodes.filter(c=>matchesQuery(c,q));$('currencyList').innerHTML=matches.length?currencyGroupMarkup(t('myCurrencies'),matches):`<p class="offline-note currency-empty">${t('currencyNotFound')}</p>`;return}
+  if(pickerEdit){$('currencyList').innerHTML=currencyGroupMarkup(t('myCurrencies'),allCodes);return}
+  const favorites=favoriteCurrencies.filter(c=>allCodes.includes(c)),recents=recentCurrencies.filter(c=>allCodes.includes(c)&&!favorites.includes(c)),remaining=allCodes.filter(c=>!favorites.includes(c)&&!recents.includes(c));
+  $('currencyList').innerHTML=currencyGroupMarkup(t('favoriteCurrencies'),favorites)+currencyGroupMarkup(t('recentCurrencies'),recents)+currencyGroupMarkup(t('myCurrencies'),remaining);
 }
-function toggleFavoriteCurrency(code){if(!CURRENCIES[code])return;favoriteCurrencies=favoriteCurrencies.includes(code)?favoriteCurrencies.filter(item=>item!==code):[...favoriteCurrencies,code];save();renderCurrencyList($('currencySearch').value)}
+function toggleFavoriteCurrency(code){if(!activeCurrencies.includes(code))return;favoriteCurrencies=favoriteCurrencies.includes(code)?favoriteCurrencies.filter(item=>item!==code):[...favoriteCurrencies,code];save();renderCurrencyList($('currencySearch').value)}
+function addCurrency(code){if(!isCode(code)||activeCurrencies.includes(code))return;meta(code);activeCurrencies=[...activeCurrencies,code];save();createFavorites();toast(`${code} ${t('added')}`);pickerMode='select';$('currencySearch').value='';renderCurrencyList()}
+function removeCurrency(code){if(state.from===code||state.to===code){toast(t('cannotRemoveActive'));return}if(activeCurrencies.length<=MIN_ACTIVE_CURRENCIES){toast(t('minCurrencies'));return}activeCurrencies=activeCurrencies.filter(c=>c!==code);favoriteCurrencies=favoriteCurrencies.filter(c=>c!==code);recentCurrencies=recentCurrencies.filter(c=>c!==code);save();createFavorites();toast(`${code} ${t('removed')}`);renderCurrencyList($('currencySearch').value)}
+function handlePickerAction(action){if(action==='add'){pickerMode='catalog';pickerEdit=false;loadCatalog()}else if(action==='back')pickerMode='select';else if(action==='edit')pickerEdit=!pickerEdit;$('currencySearch').value='';renderCurrencyList();$('currencySearch').focus({preventScroll:true})}
 function rememberCurrency(code){recentCurrencies=[code,...recentCurrencies.filter(item=>item!==code)].slice(0,MAX_RECENT_CURRENCIES)}
 function selectCurrency(code){const other=state.pickerSide==='from'?'to':'from';if(state[other]===code)state[other]=state[state.pickerSide];state[state.pickerSide]=code;state.activeInput='from';rememberCurrency(code);renderCurrencies();save();closeSheet();animateSwap();loadRate()}
 function animateSwap(){[$('fromBlock'),$('toBlock')].forEach(el=>{el.classList.remove('block-swap');void el.offsetWidth;el.classList.add('block-swap')})}
@@ -183,7 +221,7 @@ function applyCalculation(){const result=evaluateExpression(calcExpression);if(r
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.remove('show'),2200)}
 function bind(){
   document.querySelectorAll('.currency-button').forEach(b=>b.addEventListener('click',()=>openSheet(b.dataset.side)));$('closeSheet').onclick=closeSheet;$('sheetBackdrop').onclick=closeSheet;
-  $('currencySearch').addEventListener('input',e=>renderCurrencyList(e.target.value));$('currencyList').addEventListener('click',e=>{const favorite=e.target.closest('.currency-favorite');if(favorite){toggleFavoriteCurrency(favorite.dataset.favoriteCode);return}const b=e.target.closest('.currency-option');if(b)selectCurrency(b.dataset.code)});
+  $('currencySearch').addEventListener('input',e=>renderCurrencyList(e.target.value));$('currencySheet').addEventListener('click',e=>{const action=e.target.closest('[data-picker-action]');if(action)handlePickerAction(action.dataset.pickerAction)});$('currencyList').addEventListener('click',e=>{const add=e.target.closest('[data-add-code]');if(add){addCurrency(add.dataset.addCode);return}const rm=e.target.closest('[data-remove-code]');if(rm){removeCurrency(rm.dataset.removeCode);return}const favorite=e.target.closest('.currency-favorite');if(favorite){toggleFavoriteCurrency(favorite.dataset.favoriteCode);return}const b=e.target.closest('.currency-option');if(b)selectCurrency(b.dataset.code)});
   ['from','to'].forEach(side=>{$(`${side}Amount`).addEventListener('focus',e=>{state.activeInput=side;e.target.select()});$(`${side}Amount`).addEventListener('input',()=>{state.activeInput=side;clearTimeout(inputTimer);inputTimer=setTimeout(()=>calculate(side),45)});$(`${side}Amount`).addEventListener('blur',e=>{const result=evaluateExpression(e.target.value);if(result!==null&&/[+\-*/%()]/.test(e.target.value)){e.target.value=formatInput(result);calculate(side)}})});
   document.querySelectorAll('.calc-trigger').forEach(button=>button.addEventListener('click',()=>openCalculator(button.dataset.side)));$('closeCalculator').onclick=closeCalculator;$('calcBackdrop').onclick=closeCalculator;$('calcKeypad').addEventListener('click',e=>{const button=e.target.closest('[data-key]');if(button)handleCalcKey(button.dataset.key)});$('clearHistory').onclick=()=>{calcHistory=[];localStorage.removeItem('glassCurrencyCalcHistory');renderCalculator()};$('calcHistory').addEventListener('click',e=>{const button=e.target.closest('[data-history]');if(!button)return;calcExpression=calcHistory[Number(button.dataset.history)].expression;renderCalculator()});
   $('compareTrigger').onclick=openMarket;$('closeMarket').onclick=closeMarket;$('marketBackdrop').onclick=closeMarket;
@@ -198,10 +236,10 @@ function bind(){
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installButton').classList.remove('hidden')});$('installButton').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('installButton').classList.add('hidden')};
 }
 function init(){
-  if(!CURRENCIES[state.from])state.from='EUR';if(!CURRENCIES[state.to])state.to='PLN';
+  if(!isCode(state.from))state.from='EUR';if(!isCode(state.to))state.to='PLN';[state.from,state.to].forEach(c=>{if(!activeCurrencies.includes(c))activeCurrencies.push(c)});
   if(saved.theme==='light'){document.body.classList.add('light');$('themeIcon').textContent='☀'}
   const travel=params.get('travel')==='1'||saved.travel===true;$('travelToggle').checked=travel;$('travelContent').classList.toggle('open',travel);$('travelContent').setAttribute('aria-hidden',String(!travel));
-  installCurrencyPickerUX();createFavorites();bind();applyLanguage();renderCurrencies();renderTravel();loadRate();save();
+  installCurrencyPickerUX();createFavorites();bind();applyLanguage();renderCurrencies();renderTravel();loadRate();save();loadCatalog();
   if(params.get('calculator')==='1')setTimeout(()=>openCalculator('from'),250);if(params.get('compare')==='1')setTimeout(openMarket,250);
   if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 }
